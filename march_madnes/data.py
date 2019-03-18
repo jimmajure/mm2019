@@ -12,29 +12,85 @@ base_stat_names = ['score',
     ]
 
 def get_teams():
-    return pd.read_csv("../data/Teams.csv")
+    return pd.read_csv("./data/Teams.csv")
 
 def get_seeds():
-    return pd.read_csv("../data/NCAATourneySeeds.csv")
+    return pd.read_csv("./data/NCAATourneySeeds.csv")
 
 def get_coaches():
-    return pd.read_csv("../data/TeamCoachesPerDay.csv")
+    return pd.read_csv("./data/TeamCoachesPerDay.csv")
+
+def get_ordinals(systems=['MAS','BPI']):
+    print("get_ordinals...")
+    power = get_power()
+    massey = pd.read_csv("./data/MasseyOrdinals.csv")
+    massey = massey.query('systemname in {}'.format(systems))
+
+    print("length: {}".format(power.shape[0]))
+    for s in systems:
+        tmp = massey[massey['systemname']==s][['season','teamid','rankingdaynum','ordinalrank']] \
+            .sort_values(['season','teamid','rankingdaynum'])
+        tmp = tmp[['season','teamid','ordinalrank']].groupby(['season','teamid']).last().reset_index()
+        tmp = tmp.rename(columns={"ordinalrank":s.lower()})
+        power = power.merge(tmp, on=['season','teamid'])
+        print("length: {}".format(power.shape[0]))
+        # print(power.columns)
+
+    print("get_ordinals...done")
+
 
 def load_data():
-    regdtl = pd.read_csv("../data/RegularSeasonDetailedResults.csv")
+    regdtl = pd.read_csv("./data/RegularSeasonDetailedResults.csv")
     teams = get_teams()
     coaches = get_coaches()
-    conferences = pd.read_csv("../data/TeamConferences.csv")
+    conferences = pd.read_csv("./data/TeamConferences.csv")
     seeds = get_seeds()
 
     return regdtl, teams, coaches, conferences, seeds
 
+def get_power():
+    print("get_power...")
+
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.pipeline import Pipeline
+    from sklearn.linear_model.logistic import LogisticRegression
+    result = []
+    team_games = get_team_games()
+    _, teams, _, _, _ = load_data()
+    for season in range(2003,2020):
+        tg = team_games[team_games['season']==season]
+        X = tg[['teamid',"opp_teamid"]]
+        y = tg['win'].values
+        
+        enc = OneHotEncoder(categories='auto')
+        
+        lr = LogisticRegression(solver="lbfgs")
+        
+        clf = Pipeline(steps=[
+                ('encoder', enc),
+                ('classifier', lr)
+            ])    
+        lr.fit(enc.fit_transform(X), y)
+        
+        pnames = [int(n[3:7]) for n in enc.get_feature_names()]
+        name_score = list(zip([season]*len(pnames), pnames, lr.coef_[0]))
+        # we only need the first half because the other half is the negative
+        name_score = name_score[0:len(name_score)//2]
+        pvalues = pd.DataFrame(name_score, columns=('season','teamid','power'))
+        pvalues = pvalues.merge(teams[['teamid','team']])
+        
+        result += [pvalues]
+
+    result = pd.concat(result, ignore_index=True)
+    print("get_power...done")
+    return result
+        
 # Figure out the tourney games that have been played so 
 # the model can be scored...
 def get_played_tourney_games():
     print("get_played_tourney_games...")
 
-    with open("../data/NCAATourneyCompactResults.csv") as f:
+    with open("./data/NCAATourneyCompactResults.csv") as f:
         played_games = pd.read_csv(f)
         
     played_games = played_games[played_games['season']>2013]
@@ -58,9 +114,9 @@ def get_played_tourney_games():
 def get_all_tourney_games():
     _,teams,_,_,seeds = load_data()
         
-    from itertools import combinations
+    from itertools import permutations
     def game_maker(season):
-        out = [(t1,t2) for t1,t2 in combinations(sorted(list(season['teamid'])),2)]
+        out = [(t1,t2) for t1,t2 in permutations(sorted(list(season['teamid'])),2)]
         out = pd.DataFrame(out, columns=('teamid','opp_teamid'))
         return out
     
@@ -75,7 +131,7 @@ def get_all_tourney_games():
 # This will include each game twice, once for each participant.
 def get_team_games():
     print("get_team_games...")
-    regdtl,teams, coaches, conferences, seeds = load_data()
+    regdtl, teams, coaches, conferences, seeds = load_data()
     
     win_lose_names = ['teamid']+base_stat_names
     
@@ -116,7 +172,7 @@ def get_team_games():
 #     team_games = team_games.merge(power)
     
     # add the date of the game for time-series...
-    seasons = pd.read_csv("../data/Seasons.csv")
+    seasons = pd.read_csv("./data/Seasons.csv")
     team_games = team_games.merge(seasons[['season','dayzero']])
     team_games['gamedate'] = pd.to_datetime(team_games['dayzero'], format='%m/%d/%Y') \
         + pd.to_timedelta(team_games['day'], unit='d')
@@ -198,13 +254,13 @@ def get_rolling_team_games():
     
 #     print(team_games_shift)
     team_games_shift = team_games_shift.reset_index()
-    wl_gb = team_games_shift[['teamid','season','gamedate','win']+cols].groupby(['season','teamid'])
+    wl_gb = team_games_shift[['teamid','season','gamedate','win','score']+cols].groupby(['season','teamid'])
     wl_gb_r = wl_gb[['gamedate']+cols].apply(roll_on_groups)
     wl_gb_r = wl_gb_r.reset_index()
     wl_gb_r = wl_gb_r.drop(['index'],axis=1)
     wl_gb_r = wl_gb_r.dropna()
-    team_games_shift = team_games_shift[['teamid','opp_teamid','season','win']].merge(wl_gb_r,left_index=True,right_index=True)
-#     wl_gb_r = wl_gb_r.rename(columns={'win':'winpct','opp_win':'opp_winpct'})
+    team_games_shift = team_games_shift[['teamid','opp_teamid','season','win','score']].merge(wl_gb_r,left_index=True,right_index=True)
+    wl_gb_r = wl_gb_r.rename(columns={'win':'winpct','opp_win':'opp_winpct'})
     
     print("get_rolling_team_games...done")
 
@@ -217,11 +273,11 @@ def get_rolling_team_season():
     
     
     wl_gb_last_game = team_games.groupby(['season','teamid']).last().reset_index()
-    wl_gb_last_game.dropna(inplace=True);
+    wl_gb_last_game.dropna(inplace=True)
     
     print("get_rolling_team_season...done")
 
-    return wl_gb_last_game
+    return wl_gb_last_game[['season', 'teamid', 'off_rating', 'def_rating', 'ast_ratio', 'to_ratio', 'true_shoot', 'eff_fg']]
 
 if __name__ == '__main__':
-    get_rolling_team_games()
+    get_ordinals()

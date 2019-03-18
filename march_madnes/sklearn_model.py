@@ -6,11 +6,14 @@ from __future__ import print_function
 
 from sklearn.model_selection import train_test_split 
 from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report
 from sklearn.compose import ColumnTransformer
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
 from data import *
-from power import get_power
+from data import get_power
 
 import pandas as pd
 import numpy as np
@@ -26,8 +29,6 @@ def load_data():
     
     team_games = get_rolling_team_games()
     power = get_power()
-    team_season = get_team_season()
-    coaches = get_coaches()
     
 #    remove redundant games
     games = team_games.copy()
@@ -40,8 +41,8 @@ def load_data():
 
     games = games.merge(opp_games, on=['season','opp_teamid','gamedate'], suffixes=("","_opp"))
     num_games = games.shape[0]
-#     if num_games != games.shape[0]:
-#         raise Exception('num games incorrect. Expected {}, got {}'.format(num_games, games.shape[0]))
+    if num_games != games.shape[0]:
+        raise Exception('num games incorrect. Expected {}, got {}'.format(num_games, games.shape[0]))
 
     
     games = games.merge(power, on=['season','teamid'])
@@ -50,27 +51,9 @@ def load_data():
     if num_games != games.shape[0]:
         raise Exception('num games incorrect. Expected {}, got {}'.format(num_games, games.shape[0]))
     
-#     team_season = team_season[['season','teamid']+fields]
-#     games = games.merge(team_season, on=['season','teamid'])
-#     games = games.merge(team_season.rename(columns={"teamid":"opp_teamid"}),
-#                         on=['season','opp_teamid'], suffixes=("","_opp"))
-#     if num_games != games.shape[0]:
-#         raise Exception('num games incorrect')
-    
-#     games = games.merge(coaches, on=['season','teamid', 'day'])
-#     games = games.merge(coaches.rename(columns={"teamid":"opp_teamid"}),
-#                         on=['season','opp_teamid','day'], suffixes=("","_opp"))
-#     if num_games != games.shape[0]:
-#         raise Exception('num games incorrect: was {}, expected {}'.format(games.shape[0], num_games))
     
     fields = fields + ['power']
     fields = fields + [f+'_opp' for f in fields]
-#     column_trans = ColumnTransformer(
-#      [('coach', OneHotEncoder(),['coach']),
-#       ('coach_opp', OneHotEncoder(),['coach_opp'])],
-#      remainder='passthrough')
-    
-#     X = column_trans.fit_transform(games[fields])
     X = games[fields].values
     y = games['win'].values
     X_train, X_test, y_train, y_test = train_test_split(
@@ -207,15 +190,20 @@ def persist_model():
     (x_train, y_train), (x_test, y_test) = load_data()
     clf = LogisticRegression(solver="liblinear", max_iter=10000, C=1.0)
     clf.fit(x_train, y_train)
+
+    model = { \
+        "fields":['off_rating', 'def_rating', 'to_ratio', 'true_shoot', 'eff_fg','power'],
+        "clf": clf,
+        "name": "model1"
+        }
     
     from joblib import dump
-    dump(clf, "../data/model.joblib")
-    
+    dump(model, "./data/model.joblib")   
+     
     
 
 if __name__ == '__main__':
 #     train_model2()
-#     train_model()
+    # train_model()
     persist_model()
-    
     

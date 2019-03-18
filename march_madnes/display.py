@@ -5,8 +5,9 @@ Created on Mar 5, 2019
 '''
 import matplotlib.pyplot as plt
 from data import get_team_games
+from data import get_ordinals
 
-if __name__ == '__main__':
+def display_stats():
     tg = get_team_games()
     tg = tg.sort_values(['season','day'])
     teams = ['Virginia','Kansas','Xavier']
@@ -37,7 +38,7 @@ if __name__ == '__main__':
         plt.plot(games['day'].values, games['ast_ratio'].rolling(6,center=False).mean().values, label="mean")
         plt.plot(games['day'].values, games['ast_ratio'].rolling(6,center=False).median().values, label="median")
         plt.grid(True)
-        plt.ylim(0,0.5)
+        plt.ylim(0,50)
         plt.legend()
         
         plt.subplot(313)
@@ -49,3 +50,10 @@ if __name__ == '__main__':
         plt.legend()
         
     plt.show()
+
+def display_ordinal():
+    ordinal = get_ordinals()
+    print("hi")
+
+if __name__ == '__main__':
+    display_ordinal()

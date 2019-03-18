@@ -11,10 +11,10 @@ from csv import DictWriter
 
 if __name__ == '__main__':
     columns = ['season','teamid','day','coach']
-    with open("../data/TeamCoachesPerDay.csv", mode='w') as o:
+    with open("./data/TeamCoachesPerDay.csv", mode='w') as o:
         writer = DictWriter(o, columns)
         writer.writeheader()
-        with open("../data/TeamCoaches.csv") as f:
+        with open("./data/TeamCoaches.csv") as f:
             rdr = DictReader(f)
             for c in rdr:
                 for i in range(int(c['firstdaynum']),int(c['lastdaynum'])+1):
