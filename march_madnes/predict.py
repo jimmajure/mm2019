@@ -67,6 +67,12 @@ def predict():
     with open("./data/predictions.csv",mode="w") as f:
         mgames.to_csv(f, na_rep='NULL', index=False)
 
+
+    # preds = mgames.copy()
+    # preds['key'] = preds.season.map(str)+ "_" + preds.teamid.map(str)+"_"+preds.opp_teamid.map(str)
+    # with open("./data/predictions.csv",mode="w") as f:
+    #     preds[['key','model2']].to_csv(f, na_rep='NULL', index=False)
+
     return mgames, names
     
 if __name__ == '__main__':

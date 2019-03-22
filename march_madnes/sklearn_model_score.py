@@ -87,7 +87,6 @@ def load_data_score():
             X, y, test_size=0.1)
     
         yield (X_train, y_train), (X_test, y_test), all_fields
-# 0.660447  ['off_rating', 'def_rating', 'ast_ratio', 'to_ratio', 'true_shoot', 'off_rating_opp', 'def_rating_opp', 'ast_ratio_opp', 'to_ratio_opp', 'true_shoot_opp']
 
 def persist_model():
     fields = ['off_rating', 'def_rating','ast_ratio', 'to_ratio', 'true_shoot', 'power']

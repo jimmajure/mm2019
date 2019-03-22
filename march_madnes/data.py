@@ -114,9 +114,9 @@ def get_played_tourney_games():
 def get_all_tourney_games():
     _,teams,_,_,seeds = load_data()
         
-    from itertools import permutations
+    from itertools import permutations, combinations
     def game_maker(season):
-        out = [(t1,t2) for t1,t2 in permutations(sorted(list(season['teamid'])),2)]
+        out = [(t1,t2) for t1,t2 in combinations(sorted(list(season['teamid'])),2)]
         out = pd.DataFrame(out, columns=('teamid','opp_teamid'))
         return out
     
