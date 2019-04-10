@@ -1,6 +1,6 @@
 '''
 A package to deal with NCAA basketball tournaments based on the
-file formats distributed in the kagle tournament challenges.
+file formats distributed in the kaggle tournament challenges.
 
 Created on Mar 1, 2018
 
@@ -28,14 +28,15 @@ class Seed(object):
         self.seed = seed
         self.season = season
         self.team_name = teams['team'][teams['teamid']==team].iloc[0]
-        self.winner = self
+        self.simulation_winner = self
+        self.actual_winner = self
         
-    def simulate(self, p_a_beats_b, r_value, scorer):
+    def simulate(self, p_a_beats_b, r_value, scorer, resulter):
         '''
         For a Seed, the seed itself is the winner, the probability is 1.0,
         the cumulative simulated and actual scores are 0.0, and there are no results to report.
         '''
-        return self, 0, 1.0
+        return self, 0, 1.0, 0
 
     def results(self):
         return []
@@ -48,12 +49,12 @@ class Slot(Seed):
         self.slot1 = slot1
         self.slot2 = slot2
     
-    def simulate(self, p_a_beats_b, r_value, scorer):
+    def simulate(self, p_a_beats_b, r_value, scorer, resulter):
         '''
         Simulate the playing of this slot.
         '''
-        team1, score1, pvalue1 = self.slot1.simulate(p_a_beats_b, r_value, scorer)
-        team2, score2, pvalue2 = self.slot2.simulate(p_a_beats_b, r_value, scorer)
+        team1, score1, pvalue1, actual_score1 = self.slot1.simulate(p_a_beats_b, r_value, scorer, resulter)
+        team2, score2, pvalue2, actual_score2 = self.slot2.simulate(p_a_beats_b, r_value, scorer, resulter)
 
         if team1.team > team2.team:
             tmp = team1
@@ -65,38 +66,38 @@ class Slot(Seed):
         # team1 wins with probability p_value...
         r_v = r_value(p_value)
         if r_v <= p_value:
-            self.winner = team1
+            self.simulation_winner = team1
             cum_pvalue = p_value * pvalue1 * pvalue2
         else:
-            self.winner = team2
+            self.simulation_winner = team2
             cum_pvalue = (1-p_value) * pvalue2 * pvalue1
 
+        actual_score = None
+        if resulter:
+            actual_winner = resulter(self.season, team1, team2)
+            actual_score = scorer(actual_winner, self) + \
+                actual_score1 + actual_score2
         
-        score = scorer(self.winner, self)
-        return self.winner, score+score1+score2, cum_pvalue
-    
+        score = scorer(self.simulation_winner, self)
+
+        return self.simulation_winner, score+score1+score2, cum_pvalue, actual_score
+
     def results(self):
         result = self.slot1.results() + self.slot2.results()
         result.append("Slot: {}: {} vs {} => {}"\
-            .format(self.slot, self.slot1.winner.team_name, \
-                self.slot2.winner.team_name,self.winner.team_name))
+            .format(self.slot, self.slot1.simulation_winner.team_name, \
+                self.slot2.simulation_winner.team_name,self.simulation_winner.team_name))
         return result
 
 def default_scorer(winner, slot):
     '''
-    The default scoring function for a given seed winning
-    a given slot with a given probability.
-    
     The default is that each win is worth 1 point.
     '''
     return 1
 
 def round_scorer(winner: Seed, slot: Slot):
     '''
-    The default scoring function for a given seed winning
-    a given slot with a given probability.
-    
-    .
+    Scoring based on the rules of round points * seed.
     '''
     result = 0
     if slot.slot[0:2] == "R1":
@@ -116,17 +117,22 @@ def round_scorer(winner: Seed, slot: Slot):
     else:
         raise ValueError("Can't classify slot: {}".format(slot.slot))
     
-    if winner.seed[-1:] in ['a','b']:
-        seed = 16
+    if not winner:
+        result = 0
     else:
-        seed = int(winner.seed[-2:])
+        if winner.seed[-1:] in ['a','b']:
+            seed = 16
+        else:
+            seed = int(winner.seed[-2:])
     
-    return result * seed
+        result = result * seed
+
+    return result
 
         
 class Tournament(object):
     '''
-    Represents an individual NCAA tournament.
+    Represents an individual NCAA tournament. Builds the tournament 
     '''
 
     def __init__(self, season: int, slots: DataFrame, seeds: DataFrame, teams: DataFrame):
@@ -165,9 +171,9 @@ class Tournament(object):
         
         self.final_slot = slots_dict['R6CH']
         
-    def simulate(self, p_a_beats_b, r_value=r_value, scorer=default_scorer):
-        winner, score, pvalue = self.final_slot.simulate(p_a_beats_b, r_value, scorer)
-        return winner, score, pvalue
+    def simulate(self, p_a_beats_b, r_value=r_value, scorer=default_scorer, resulter=None):
+        winner, score, pvalue, actual_score = self.final_slot.simulate(p_a_beats_b, r_value, scorer, resulter)
+        return winner, score, pvalue, actual_score
 
     def results(self):
         return self.final_slot.results()
